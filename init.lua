@@ -290,15 +290,64 @@ smartshop.update_info=function(pos)
 end
 
 
+local function pos_table_from_string(s)
+	local x, y, z = s:match("%(?([%-%d%.]+),([%-%d%.]+),([%-%d%.]+)%)?")
+	if x and y and z then
+		return { x = tonumber(x), y = tonumber(y), z = tonumber(z) }
+	end
+	return nil
+end
+
+local function pos_table_equal(p1, p2, epsilon)
+	epsilon = epsilon or 0.05
+
+	if not p1 or not p2 then
+		return false
+	end
+
+	return math.abs(p1.x - p2.x) < epsilon
+		 and math.abs(p1.y - p2.y) < epsilon
+		 and math.abs(p1.z - p2.z) < epsilon
+end
 
 
 smartshop.update=function(p,stat)
 --clear
 	local pos = table.copy(p) -- do not overwrite the pos table, we need it later!
+
+	--[[
+		this will remove old entities that were from when coordinates
+		were like (15,2,20) as a string but now displayed using a pos
+		as table as the comparison works better for when the coordinate
+		uses decimal. This doesn't affect anything besides displaying
+		the smartshop entities and it removes "stuck" old entities.
+	]]
+
 	local spos=minetest.pos_to_string(pos)
+	local spos_old = "(" .. pos.x .. "," .. pos.y .. "," .. pos.z .. ")"
+
+	local spos_old_tbl = pos_table_from_string(spos_old)
+	local spos_tbl = pos_table_from_string(spos)
+
 	for _, ob in ipairs(minetest.env:get_objects_inside_radius(pos, 2)) do
-		if ob and ob:get_luaentity() and ob:get_luaentity().smartshop and ob:get_luaentity().pos==spos then
-			ob:remove()	
+		if ob then
+			local lua_entity = ob:get_luaentity()
+			if lua_entity then
+				local epos = lua_entity.pos
+				local epos_tbl = nil
+
+				if type(epos) == "string" then
+					epos_tbl = pos_table_from_string(epos)
+				elseif type(epos) == "table" then
+					epos_tbl = epos
+				end
+
+				if lua_entity.smartshop and epos_tbl then
+					if pos_table_equal(epos_tbl, spos_old_tbl) or pos_table_equal(epos_tbl, spos_tbl) then
+						ob:remove()
+					end
+				end
+			end
 		end
 	end
 	if stat=="clear" then return end
